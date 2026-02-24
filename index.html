@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Sistema Cosmética Natural</title>
+<style>
+body{font-family:Arial;margin:0;background:#f5f7fb}
+header{background:#6c63ff;color:#fff;padding:15px;text-align:center;font-size:22px}
+nav{display:flex;justify-content:center;gap:10px;margin:15px}
+button{padding:10px 15px;border:none;border-radius:8px;cursor:pointer}
+.tab{background:#ddd}
+.active{background:#6c63ff;color:white}
+.container{max-width:900px;margin:auto;background:white;padding:20px;border-radius:12px;box-shadow:0 0 10px rgba(0,0,0,0.1)}
+input,select{padding:8px;margin:5px;border-radius:6px;border:1px solid #ccc}
+.product-line{display:flex;gap:10px;align-items:center;margin-bottom:10px}
+.product-line button{background:#ff5252;color:white}
+.add-btn{background:#00c853;color:white}
+.edit{background:#2196f3;color:white}
+.delete{background:#ff5252;color:white}
+table{width:100%;border-collapse:collapse;margin-top:15px}
+th,td{border:1px solid #ddd;padding:8px;text-align:center}
+</style>
+</head>
+<body>
+<header>Sistema Cosmética Natural</header>
+
+<nav>
+<button class="tab active" onclick="showTab('stock')">Stock</button>
+<button class="tab" onclick="showTab('pedidos')">Pedidos</button>
+</nav>
+
+<div id="stock" class="container">
+<h2>Stock</h2>
+<input id="nombre" placeholder="Nombre">
+<input id="precio" type="number" placeholder="Precio base">
+<input id="cantidad" type="number" placeholder="Cantidad">
+<button onclick="agregarProducto()">Agregar</button>
+
+<table>
+<thead>
+<tr><th>Nombre</th><th>Precio</th><th>Cantidad</th><th>Acciones</th></tr>
+</thead>
+<tbody id="listaStock"></tbody>
+</table>
+</div>
+
+<div id="pedidos" class="container" style="display:none">
+<h2>Pedidos</h2>
+<div id="lineas"></div>
+<button class="add-btn" onclick="agregarLinea()">+ Producto</button>
+<br>
+<select id="porcentaje">
+<option value="0">0% (Costo)</option>
+<option value="0.3">30% (Venta)</option>
+</select>
+<button onclick="crearPedido()">Agregar Pedido</button>
+
+<table>
+<thead>
+<tr><th>Detalle</th><th>Total</th><th>Acciones</th></tr>
+</thead>
+<tbody id="listaPedidos"></tbody>
+</table>
+</div>
+
+<script>
+let stock=[];
+let pedidos=[];
+let editIndex=null;
+
+function showTab(tab){
+ document.getElementById('stock').style.display=tab==='stock'?'block':'none';
+ document.getElementById('pedidos').style.display=tab==='pedidos'?'block':'none';
+ document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+ event.target.classList.add('active');
+}
+
+function agregarProducto(){
+ const nombre=document.getElementById('nombre').value;
+ const precio=parseFloat(document.getElementById('precio').value);
+ const cantidad=parseInt(document.getElementById('cantidad').value);
+ if(!nombre||!precio||!cantidad)return alert('Completa todo');
+ stock.push({nombre,precio,cantidad});
+ renderStock();
+}
+
+function renderStock(){
+ const lista=document.getElementById('listaStock');
+ lista.innerHTML='';
+ stock.forEach((p,i)=>{
+ lista.innerHTML+=`<tr>
+ <td><input value='${p.nombre}' onchange='stock[${i}].nombre=this.value'></td>
+ <td><input type='number' value='${p.precio}' onchange='stock[${i}].precio=parseFloat(this.value)'></td>
+ <td><input type='number' value='${p.cantidad}' onchange='stock[${i}].cantidad=parseInt(this.value)'></td>
+ <td><button class='delete' onclick='eliminarProducto(${i})'>Eliminar</button></td>
+ </tr>`;
+ });
+}
+
+function eliminarProducto(i){
+ stock.splice(i,1);
+ renderStock();
+}
+
+function agregarLinea(){
+ const div=document.getElementById('lineas');
+ const opciones=stock.map((p,i)=>`<option value='${i}'>${p.nombre}</option>`).join('');
+ div.innerHTML+=`<div class='product-line'>
+ <select class='prod'>${opciones}</select>
+ <input type='number' class='cant' placeholder='Cantidad'>
+ <button onclick='this.parentElement.remove()'>X</button>
+ </div>`;
+}
+
+function crearPedido(){
+ const porcentaje=parseFloat(document.getElementById('porcentaje').value);
+ const lineas=document.querySelectorAll('.product-line');
+ if(lineas.length===0)return alert('Agrega productos');
+
+ let total=0;
+ let detalle='';
+ let items=[];
+
+ for(let l of lineas){
+ const idx=l.querySelector('.prod').value;
+ const cant=parseInt(l.querySelector('.cant').value);
+ const prod=stock[idx];
+
+ if(!cant || cant<=0) continue;
+ if(prod.cantidad < cant){
+   alert('No hay suficiente stock de '+prod.nombre);
+   return;
+ }
+ }
+
+ lineas.forEach(l=>{
+ const idx=l.querySelector('.prod').value;
+ const cant=parseInt(l.querySelector('.cant').value);
+ const prod=stock[idx];
+ if(!cant)return;
+
+ const precio=prod.precio*(1+porcentaje);
+ const subtotal=precio*cant;
+ total+=subtotal;
+ detalle+=`${prod.nombre} x${cant} ($${precio.toFixed(2)} c/u)<br>`;
+ items.push({idx,cant});
+
+ // DESCONTAR STOCK
+ prod.cantidad -= cant;
+ });
+
+ if(editIndex!==null){
+ pedidos[editIndex]={detalle,total,items,porcentaje};
+ editIndex=null;
+ }else{
+ pedidos.push({detalle,total,items,porcentaje});
+ }
+
+ document.getElementById('lineas').innerHTML='';
+ renderPedidos();
+ renderStock();
+}
+
+function renderPedidos(){
+ const lista=document.getElementById('listaPedidos');
+ lista.innerHTML='';
+ pedidos.forEach((p,i)=>{
+ lista.innerHTML+=`<tr>
+ <td>${p.detalle}</td>
+ <td>$${p.total.toFixed(2)}</td>
+ <td>
+ <button class='edit' onclick='editarPedido(${i})'>Editar</button>
+ <button class='delete' onclick='eliminarPedido(${i})'>Eliminar</button>
+ </td>
+ </tr>`;
+ });
+}
+
+function eliminarPedido(i){
+ // DEVOLVER STOCK
+ pedidos[i].items.forEach(it=>{
+ stock[it.idx].cantidad += it.cant;
+ });
+
+ pedidos.splice(i,1);
+ renderPedidos();
+ renderStock();
+}
+
+function editarPedido(i){
+ const pedido=pedidos[i];
+ editIndex=i;
+
+ // DEVOLVER STOCK DEL PEDIDO ANTES DE EDITAR
+ pedido.items.forEach(it=>{
+ stock[it.idx].cantidad += it.cant;
+ });
+
+ const div=document.getElementById('lineas');
+ div.innerHTML='';
+ pedido.items.forEach(it=>{
+ const opciones=stock.map((p,idx)=>`<option value='${idx}' ${idx==it.idx?'selected':''}>${p.nombre}</option>`).join('');
+ div.innerHTML+=`<div class='product-line'>
+ <select class='prod'>${opciones}</select>
+ <input type='number' class='cant' value='${it.cant}'>
+ <button onclick='this.parentElement.remove()'>X</button>
+ </div>`;
+ });
+
+ document.getElementById('porcentaje').value=pedido.porcentaje;
+ renderStock();
+}
+</script>
+</body>
+</html>
